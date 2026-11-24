@@ -14,6 +14,7 @@ SQL Server schema for every Sosa Fam app: sign-in, households (the tenants), mem
 | 0002_core_households | Households, Members (roles Owner/Adult/Member/Child), Invites (schema `core`) |
 | 0003_core_row_level_security | Security policy that filters and blocks rows by household |
 | 0004_app_role | `sosafam_api` role with data-only access for the API's login |
+| 0005_grocery_lists | Stores (shared by all apps), grocery lists and items tagged by store (schema `family`) |
 
 ## Apply the scripts
 
