@@ -1,59 +1,65 @@
 # sosa-fam-database
 
-SQL Server schema for every Sosa Fam app: sign-in, households (the tenants), members, invites, and each app's own tables.
+The SQL Server database behind every Sosa Fam app: sign-in, households (the tenants), members, invites, stores, the family app's grocery lists, and the food storage app's tables as they arrive. Households are kept apart by row-level security inside the database.
+
+The standards follow the Solasta database repository, adapted for households. Start with:
+
+| Read | For |
+|---|---|
+| [QUICKSTART.md](QUICKSTART.md) | Building a database and making your first change |
+| [DATABASE_CONSTITUTION.md](DATABASE_CONSTITUTION.md) | The binding rules |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How a change goes from issue to Prod |
+| [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) | Day-to-day workflow and patterns |
+| [STRUCTURE.md](STRUCTURE.md) | What lives in each folder |
+| [QUICK_REFERENCE.md](QUICK_REFERENCE.md) | Names, templates and commands on one page |
+| [docs/Deploying-Migrations.md](docs/Deploying-Migrations.md) | Deploying to Dev and Prod |
+| [CICD_GUIDE.md](CICD_GUIDE.md) | Automated checks |
+| [CLAUDE.md](CLAUDE.md), [.github/copilot-constitution.md](.github/copilot-constitution.md), [.github/copilot-instructions.md](.github/copilot-instructions.md) | Rules for AI agents |
+| [.github/ProxyID-PrefixRegistry.md](.github/ProxyID-PrefixRegistry.md) | Public IDs (`Prefix:PartKey:GUID`) |
+| [COPILOT_PROMPTS.md](COPILOT_PROMPTS.md), [.github/prompts/](.github/prompts/) | Ready-made prompts and diagnostic queries |
 
 ## How it works
 
-- `src/SosaFam.Database/Scripts/` holds numbered scripts. Each runs exactly once, in order, and the list of applied scripts is kept in `dbo.SchemaVersions` (DbUp).
-- **Never edit a script that has already run anywhere.** Add a new, higher-numbered script instead.
-- Row-level security keeps households apart inside the database, even if the API has a bug. See `0003_core_row_level_security.sql` for how it works and the pattern for new tables.
+- **`Migrations/`** is the history: `YYYYMMDD_HHMM_<Verb><SCHEMA>_<What>.sql` files, applied in name order, each once, each in its own transaction, each recorded in `dbo.SchemaVersion`. Never edit one that has run anywhere.
+- **Object folders** (`Tables/`, `Functions/`, `SecurityPolicies/`, ...) hold the current state of every object, one file per object, safe to run twice.
+- **`src/SosaFam.Database`** is the runner. It carries every migration, skips the applied ones, and supports `--what-if`, `--filter`, `--require` and `--list`.
+- **`Scripts/deploy/`** has one PowerShell wrapper per change, with prerequisites, a preview, a Prod confirmation and post-checks.
 
-| Script | What it adds |
-| --- | --- |
-| 0001_auth_identity | ASP.NET Core Identity users, external logins, refresh tokens (schema `auth`) |
-| 0002_core_households | Households, Members (roles Owner/Adult/Member/Child), Invites (schema `core`) |
-| 0003_core_row_level_security | Security policy that filters and blocks rows by household |
-| 0004_app_role | `sosafam_api` role with data-only access for the API's login |
-| 0005_grocery_lists | Stores (shared by all apps), grocery lists and items tagged by store (schema `family`) |
+## Environments
 
-## Apply the scripts
+| | Database | Server |
+|---|---|---|
+| Dev | `SOS_FAMILY` | SQL Server on Andres's PC |
+| Prod | `SOS_FAMILY` | the family's SQL Server (later) |
 
-Requires the .NET 8 SDK and SQL Server 2016 or later (row-level security).
+## Schemas
+
+| Schema | Holds |
+|---|---|
+| `auth` | ASP.NET Core Identity users, logins, tokens; refresh tokens |
+| `core` | Households, members (Owner, Adult, Member, Child), invites, stores |
+| `security` | Row-level security predicates and the `HouseholdIsolation` policy |
+| `family` | Grocery lists and items (family data-sharing app) |
+| `PAN` | Food storage app (reserved) |
+| `dbo` | `SchemaVersion` |
+
+## Baseline
+
+| Migration | What it adds |
+|---|---|
+| `00000000_0000_CreateSchemaVersionTable` | `dbo.SchemaVersion`; records the baseline on databases the old DbUp runner built |
+| `00000000_0001_Baseline_AuthIdentity` | Identity users, external logins, refresh tokens |
+| `00000000_0002_Baseline_CoreHouseholds` | Households, members, invites |
+| `00000000_0003_Baseline_CoreRowLevelSecurity` | The policy that filters and blocks rows by household |
+| `00000000_0004_Baseline_AppRole` | `sosafam_api`, data-only access for the API's login |
+| `00000000_0005_Baseline_FamilyGroceryLists` | Stores, grocery lists and items |
+
+These five predate the standards and keep their original SQL unchanged (see the constitution's *Baseline exceptions*).
+
+## Test the household isolation
 
 ```bash
-dotnet run --project src/SosaFam.Database -- "Server=<server>;Database=SosaFam;Integrated Security=True;TrustServerCertificate=True"
-```
-
-Add `--ensure-database` to create the database if it does not exist (development only). You can also set the connection string in `SOSAFAM_DB_CONNECTION` and run with no arguments.
-
-Run migrations with an admin login. The API should use its own login that is only a member of `sosafam_api`:
-
-```sql
-CREATE LOGIN sosafam_api_login WITH PASSWORD = '<strong password>';
-USE SosaFam;
-CREATE USER sosafam_api_user FOR LOGIN sosafam_api_login;
-ALTER ROLE sosafam_api ADD MEMBER sosafam_api_user;
-```
-
-## Test the tenant isolation
-
-`tests/rls_isolation_test.sql` creates two test households, checks that neither can see or change the other's rows, then removes them. Run it on a development database:
-
-```bash
-sqlcmd -S <server> -d SosaFam -i tests/rls_isolation_test.sql -b
+sqlcmd -S <server> -d SOS_FAMILY -E -b -i Scripts/Tests/Policies/security/HouseholdIsolation_Tests.sql
 ```
 
 It prints `PASS: row-level security keeps households apart.` or fails with the check that broke.
-
-## Local SQL Server for development
-
-```bash
-docker run -d --name sosafam-sql -e ACCEPT_EULA=Y -e 'MSSQL_SA_PASSWORD=<dev password>' -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
-```
-
-## Adding tables for an app
-
-1. Add a new script, for example `0010_pantry_items.sql`. Use a schema per app (`family`, `pantry`).
-2. Give every tenant-owned table a `HouseholdId uniqueidentifier NOT NULL` with a foreign key to `core.Households` (`ON DELETE CASCADE`).
-3. In the same script, add the table to `security.HouseholdIsolation` with the filter and block predicates shown in `0003`, and grant the `sosafam_api` role access to the new schema.
-4. Extend `tests/rls_isolation_test.sql` to cover the new table.
