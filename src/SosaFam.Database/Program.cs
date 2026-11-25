@@ -209,7 +209,11 @@ record Options(string ConnectionString, bool WhatIf, bool EnsureDatabase, bool L
         if (fromStdin)
         {
             if (connection is not null) { Console.Error.WriteLine("Use --connection-stdin or a connection string argument, not both."); return null; }
-            connection = Console.In.ReadLine();
+            // Read as UTF-8 whatever the console code page is. Windows PowerShell 5.1 can prefix
+            // piped text with a byte-order mark: the reader drops a BOM it recognizes, and a
+            // stray U+FEFF left by a re-encoding is trimmed too.
+            using var stdin = new StreamReader(Console.OpenStandardInput(), new System.Text.UTF8Encoding(false), detectEncodingFromByteOrderMarks: true);
+            connection = stdin.ReadLine()?.TrimStart('\uFEFF').Trim();
         }
         connection ??= Environment.GetEnvironmentVariable("SOSAFAM_DB_CONNECTION");
         if (string.IsNullOrWhiteSpace(connection))
