@@ -47,7 +47,9 @@
 
 | Prefix | TypeId | TypeName | Type table | Description | Registered |
 |---|---|---|---|---|---|
-| *(none yet; reserved namespace `PA**`)* | | | | | |
+| `PALO` | — | Location | *(none)* | `PAN.Locations`: pantry, fridge, basement, ... | 2026-11-25 |
+| `PAPR` | — | Product | *(none)* | `PAN.Products`: a kind of food a household keeps | 2026-11-25 |
+| `PAST` | — | StockLevel | *(none)* | `PAN.StockLevels`: one product in one location | 2026-11-25 |
 
 ## Adding a prefix
 
@@ -55,7 +57,7 @@
 2. **Type table** (when the entity has subtypes): `[Prefix] VARCHAR(4) NOT NULL` with `CONSTRAINT [UQ_<Types>_Prefix] UNIQUE ([Prefix])`. A table without subtypes uses one fixed prefix (TypeId `—`, Type table *(none)*).
 3. **Seed** the type rows with `MERGE` in a data migration, with explicit IDs.
 4. **Register in `MAC.vwTableTypesAndPrefixes`**: add a `UNION` block for the type table.
-5. **Branch in `MAC.fxGeneratePrefixParts`**: `ELSE IF (@TypeName = '<Entity>')`.
+5. **No function change needed**: `MAC.fxGeneratePrefixParts` resolves every prefix through the view.
 6. **Entity table**: `[Proxy] VARCHAR(100) NOT NULL` (`UQ_<Table>_Proxy`) and `[PartKey] VARCHAR(6) NOT NULL`.
 7. **Generate** in the insert path:
 
@@ -79,7 +81,9 @@ Created by the first Proxy-enabled migration, in its own migration before the ta
 | `fxGeneratePrefixProxy` | `MAC` | Scalar function | `Functions/MAC/fxGeneratePrefixProxy.sql` | `Prefix:PartKey:` (the caller appends the GUID) |
 | `fxGetPrefixTypeIdFromProxy` | `MAC` | Table-valued function | `Functions/MAC/fxGetPrefixTypeIdFromProxy.sql` | Splits a proxy and resolves its TypeId |
 
-**Status:** not created yet.
+**Status:** created by `20261125_1903_CreateMAC_ProxyIdInfrastructure`. Test: `Scripts/Tests/Functions/MAC/ProxyId_Tests.sql`.
+
+Fixed prefixes (tables without a `*Types` table) are listed in the `VALUES` block of `MAC.vwTableTypesAndPrefixes` with `TypeId` NULL; `MAC.fxGeneratePrefixParts` reads the view, so a new prefix needs no function change, only a migration that alters the view. Tables with a `*Types` table add a `UNION ALL` block to the view instead.
 
 `fxGetPartKey` algorithm: `YYYYMM` as an `INT` (202611), to `VARBINARY(4)`, to hex with `CONVERT(..., 1)` (`0x00031773`), then strip `0x000` (`31773`). Use `SYSUTCDATETIME()` so every server agrees.
 

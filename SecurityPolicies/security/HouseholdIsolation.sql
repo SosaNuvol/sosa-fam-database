@@ -10,6 +10,8 @@
  * Author: Claude (for Andres Sosa)
  * Created: 2026-11-24 (baseline migrations 00000000_0003 and 00000000_0005)
  * Modified: 2026-11-24 - Current-state file added (0003 plus the tables 0005 added).
+ *           2026-11-25 - PAN.Locations, PAN.Products, PAN.StockLevels, PAN.StockChanges
+ *                        (migrations 20261125_1904 to 20261125_1907).
  *
  * Every new household-owned table must be added here AND in its migration with
  * ALTER SECURITY POLICY ... ADD FILTER / BLOCK PREDICATE (see DATABASE_CONSTITUTION.md).
@@ -47,7 +49,21 @@ CREATE SECURITY POLICY [security].[HouseholdIsolation]
     ADD BLOCK PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [family].[GroceryLists] AFTER UPDATE,
     ADD FILTER PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [family].[GroceryItems],
     ADD BLOCK PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [family].[GroceryItems] AFTER INSERT,
-    ADD BLOCK PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [family].[GroceryItems] AFTER UPDATE
+    ADD BLOCK PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [family].[GroceryItems] AFTER UPDATE,
+
+    -- PAN (food storage app): current household only.
+    ADD FILTER PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [PAN].[Locations],
+    ADD BLOCK PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [PAN].[Locations] AFTER INSERT,
+    ADD BLOCK PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [PAN].[Locations] AFTER UPDATE,
+    ADD FILTER PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [PAN].[Products],
+    ADD BLOCK PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [PAN].[Products] AFTER INSERT,
+    ADD BLOCK PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [PAN].[Products] AFTER UPDATE,
+    ADD FILTER PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [PAN].[StockLevels],
+    ADD BLOCK PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [PAN].[StockLevels] AFTER INSERT,
+    ADD BLOCK PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [PAN].[StockLevels] AFTER UPDATE,
+    ADD FILTER PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [PAN].[StockChanges],
+    ADD BLOCK PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [PAN].[StockChanges] AFTER INSERT,
+    ADD BLOCK PREDICATE [security].[fn_HouseholdAccess]([HouseholdId]) ON [PAN].[StockChanges] AFTER UPDATE
 WITH (STATE = ON);');
 END
 GO
