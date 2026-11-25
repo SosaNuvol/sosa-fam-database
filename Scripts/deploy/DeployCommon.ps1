@@ -81,11 +81,12 @@ function Invoke-SosaFamDeployment {
         [string]$CredentialName,
         [pscredential]$Credential,
         [string]$ConfirmTarget,
+        [switch]$WindowsAuth,
         [switch]$WhatIf
     )
 
-    if ($Environment -eq 'Prod' -and -not $Credential) {
-        if (-not $CredentialName) { throw 'Prod needs -CredentialName Prod (or -Credential (Get-Credential)).' }
+    if ($Environment -eq 'Prod' -and -not $Credential -and -not $WindowsAuth) {
+        if (-not $CredentialName) { throw 'Prod needs -CredentialName Prod, -Credential (Get-Credential), or -WindowsAuth.' }
         $Credential = Get-SosaFamCredential -Name $CredentialName
     } elseif ($CredentialName -and -not $Credential) {
         $Credential = Get-SosaFamCredential -Name $CredentialName

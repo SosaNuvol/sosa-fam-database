@@ -3,7 +3,7 @@
 | | Server | Database | Login |
 |---|---|---|---|
 | **Dev** | the SQL Server on Andres's PC (`localhost` by default) | `SOS_FAMILY` | Windows auth (your account) |
-| **Prod** | the family's SQL Server (to be set up) | `SOS_FAMILY` | a SQL deploy login, see [The Prod login](#the-prod-login) |
+| **Prod** | the family's SQL Server | `SOS_FAMILY` | a saved SQL deploy login or Windows auth, see [The Prod login](#the-prod-login) |
 
 A migration always goes to Dev first; the API is then built and tested against Dev; only after the PRs merge does it go to Prod.
 
@@ -61,7 +61,7 @@ sqlcmd -S localhost -E -Q "CREATE DATABASE [SOS_FAMILY]"
 .\Scripts\deploy\Deploy_Migrations.ps1
 ```
 
-`Deploy_Baseline.ps1` creates `dbo.SchemaVersion` and the baseline (sign-in, households, row-level security, the API role, grocery lists). On a database the old DbUp runner built (it has `dbo.SchemaVersions`), it only creates `dbo.SchemaVersion` and records the five baseline migrations as already applied; nothing else changes. `dbo.SchemaVersions` is left in place as history.
+`Deploy_Baseline.ps1` creates `dbo.SchemaVersion` and the baseline (sign-in, households, row-level security, the API role, grocery lists). On a database the old DbUp runner built (it has `dbo.SchemaVersions`), it only creates `dbo.SchemaVersion` and records the five baseline migrations as already applied; nothing else changes. `20261125_1849_DropDBO_SchemaVersions` then removes the old `dbo.SchemaVersions`.
 
 ### The API's login
 
@@ -109,6 +109,7 @@ Never put a password on a command line, in a file in this repository, or in chat
 
 - **Saved login (recommended):** run `.\Scripts\deploy\Save-DeployCredential.ps1 -Name Prod` once. It's saved to `%APPDATA%\SosaFam\DeployCredentials\Prod.xml`, encrypted with Windows DPAPI so only your Windows account on that PC can read it. Wrappers load it with `-CredentialName Prod`, decrypt it in memory, and pass the connection string to the runner's process only, clearing it when the run ends. Rerun after the password changes.
 - **Prompt:** `-Credential (Get-Credential)` instead of `-CredentialName`.
+- **Windows authentication:** if your Windows account is a `db_owner` of Prod `SOS_FAMILY`, pass `-WindowsAuth` instead of a credential.
 - Don't keep the password in an environment variable: every process you start inherits it.
 
 ## When Claude runs it

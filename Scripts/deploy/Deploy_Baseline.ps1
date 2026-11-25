@@ -15,6 +15,7 @@ param(
     [string]$CredentialName,
     [pscredential]$Credential,
     [string]$ConfirmTarget,
+    [switch]$WindowsAuth,
     [switch]$WhatIf
 )
 
@@ -40,4 +41,4 @@ $postChecks = [ordered]@{
 
 Invoke-SosaFamDeployment -Environment $Environment -ServerInstance $ServerInstance -Database $Database `
     -Plan $plan -PostChecks $postChecks -CredentialName $CredentialName -Credential $Credential `
-    -ConfirmTarget $ConfirmTarget -WhatIf:$WhatIf
+    -ConfirmTarget $ConfirmTarget -WindowsAuth:$WindowsAuth -WhatIf:$WhatIf
