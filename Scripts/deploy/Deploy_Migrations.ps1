@@ -30,5 +30,6 @@ $runnerArgs = @()
 $MigrationFilter | ForEach-Object { $runnerArgs += @('--filter', $_) }
 if ($WhatIf) { $runnerArgs += '--what-if' }
 
-$code = Invoke-SosaFamRunner -ConnectionString $connectionString -Arguments $runnerArgs
+$runnerDll = Build-SosaFamRunner
+$code = Invoke-SosaFamRunner -RunnerDll $runnerDll -ConnectionString $connectionString -Arguments $runnerArgs
 exit $code

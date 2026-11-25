@@ -5,8 +5,9 @@
 .DESCRIPTION
     Builds the connection string (Windows auth for Dev, a saved SQL login for Prod), runs the
     migration runner (src/SosaFam.Database) for exactly the wrapper's migrations, and runs the
-    wrapper's post-checks. The password never appears on a command line or in a file: it is
-    decrypted in memory and handed to the runner's process only, then cleared.
+    wrapper's post-checks. The password never appears on a command line, in a file or in an
+    environment variable: it is decrypted in memory, written to the runner's standard input
+    (--connection-stdin), and used in-process by the post-checks.
 #>
 
 Set-StrictMode -Version Latest
@@ -41,15 +42,23 @@ function New-SosaFamConnectionString {
     $parts -join ';'
 }
 
+function Build-SosaFamRunner {
+    # Build before the connection string exists, so no build process (or MSBuild node left
+    # running afterwards) can ever see it.
+    Write-Host 'Building the migration runner...'
+    & dotnet build $script:RunnerProject -c Release -nologo -v quiet | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "Building the migration runner failed (exit code $LASTEXITCODE)." }
+    $dll = Join-Path $script:RunnerProject 'bin/Release/net8.0/SosaFam.Database.dll'
+    if (-not (Test-Path $dll)) { throw "Built runner not found at $dll." }
+    $dll
+}
+
 function Invoke-SosaFamRunner {
-    param([Parameter(Mandatory)][string]$ConnectionString, [string[]]$Arguments = @())
-    $env:SOSAFAM_DB_CONNECTION = $ConnectionString
-    try {
-        & dotnet run --project $script:RunnerProject -- @Arguments | Out-Host
-        return $LASTEXITCODE
-    } finally {
-        Remove-Item Env:\SOSAFAM_DB_CONNECTION -ErrorAction SilentlyContinue
-    }
+    param([Parameter(Mandatory)][string]$RunnerDll, [Parameter(Mandatory)][string]$ConnectionString, [string[]]$Arguments = @())
+    # The connection string goes to the runner's standard input only: never an argument
+    # (visible in the process list) and never an environment variable (inherited by children).
+    $ConnectionString | & dotnet $RunnerDll --connection-stdin @Arguments | Out-Host
+    return $LASTEXITCODE
 }
 
 function Invoke-SosaFamScalar {
@@ -85,6 +94,9 @@ function Invoke-SosaFamDeployment {
         [switch]$WhatIf
     )
 
+    if ($Credential -and $CredentialName) { throw 'Use -Credential or -CredentialName, not both.' }
+    if ($WindowsAuth -and ($Credential -or $CredentialName)) { throw 'Use -WindowsAuth or a credential, not both.' }
+
     if ($Environment -eq 'Prod' -and -not $Credential -and -not $WindowsAuth) {
         if (-not $CredentialName) { throw 'Prod needs -CredentialName Prod, -Credential (Get-Credential), or -WindowsAuth.' }
         $Credential = Get-SosaFamCredential -Name $CredentialName
@@ -93,6 +105,7 @@ function Invoke-SosaFamDeployment {
     }
 
     $target = "$ServerInstance/$Database"
+    $runnerDll = Build-SosaFamRunner
     $connectionString = New-SosaFamConnectionString -ServerInstance $ServerInstance -Database $Database -Credential $Credential
 
     Write-Host "Environment: $Environment    Target: $target"
@@ -104,7 +117,7 @@ function Invoke-SosaFamDeployment {
     $Requires | ForEach-Object { $runnerArgs += @('--require', $_) }
 
     if ($WhatIf) {
-        $code = Invoke-SosaFamRunner -ConnectionString $connectionString -Arguments ($runnerArgs + '--what-if')
+        $code = Invoke-SosaFamRunner -RunnerDll $runnerDll -ConnectionString $connectionString -Arguments ($runnerArgs + '--what-if')
         if ($code -ne 0) { throw "Preview failed (exit code $code)." }
         Write-Host 'Preview only. Nothing changed.'
         return
@@ -115,7 +128,7 @@ function Invoke-SosaFamDeployment {
         if ($typed -ne $target) { throw "Target not confirmed ('$typed' is not '$target'). Nothing changed." }
     }
 
-    $code = Invoke-SosaFamRunner -ConnectionString $connectionString -Arguments $runnerArgs
+    $code = Invoke-SosaFamRunner -RunnerDll $runnerDll -ConnectionString $connectionString -Arguments $runnerArgs
     if ($code -ne 0) { throw "Deployment failed (exit code $code). See the output above." }
 
     Write-Host 'Post-checks:'

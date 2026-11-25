@@ -13,7 +13,8 @@ using Microsoft.Data.SqlClient;
 //
 // Usage:
 //   dotnet run --project src/SosaFam.Database -- [options] "<connection string>"
-//   (or set SOSAFAM_DB_CONNECTION and leave the connection string out)
+//   (or pass --connection-stdin and write the connection string as the first line of standard
+//   input, which is how the deploy scripts pass a password; or set SOSAFAM_DB_CONNECTION, for Dev)
 //
 // Options:
 //   --what-if             list what would run; change nothing
@@ -21,6 +22,7 @@ using Microsoft.Data.SqlClient;
 //   --require <name>      stop unless this migration is already applied; repeatable
 //   --ensure-database     create the database if it does not exist (Dev only)
 //   --list                list every migration and whether it is applied
+//   --connection-stdin    read the connection string from the first line of standard input
 
 var options = Options.Parse(args);
 if (options is null) return 2;
@@ -186,7 +188,7 @@ record Options(string ConnectionString, bool WhatIf, bool EnsureDatabase, bool L
     {
         var filters = new List<string>();
         var requires = new List<string>();
-        bool whatIf = false, ensure = false, list = false;
+        bool whatIf = false, ensure = false, list = false, fromStdin = false;
         string? connection = null;
         for (var i = 0; i < args.Length; i++)
         {
@@ -195,6 +197,7 @@ record Options(string ConnectionString, bool WhatIf, bool EnsureDatabase, bool L
                 case "--what-if": whatIf = true; break;
                 case "--ensure-database": ensure = true; break;
                 case "--list": list = true; break;
+                case "--connection-stdin": fromStdin = true; break;
                 case "--filter" when i + 1 < args.Length: filters.Add(args[++i]); break;
                 case "--require" when i + 1 < args.Length: requires.Add(args[++i]); break;
                 default:
@@ -203,10 +206,15 @@ record Options(string ConnectionString, bool WhatIf, bool EnsureDatabase, bool L
                     break;
             }
         }
+        if (fromStdin)
+        {
+            if (connection is not null) { Console.Error.WriteLine("Use --connection-stdin or a connection string argument, not both."); return null; }
+            connection = Console.In.ReadLine();
+        }
         connection ??= Environment.GetEnvironmentVariable("SOSAFAM_DB_CONNECTION");
         if (string.IsNullOrWhiteSpace(connection))
         {
-            Console.Error.WriteLine("Pass a connection string or set SOSAFAM_DB_CONNECTION.");
+            Console.Error.WriteLine("Pass a connection string, pass --connection-stdin, or set SOSAFAM_DB_CONNECTION.");
             return null;
         }
         return new Options(connection, whatIf, ensure, list, filters, requires);
