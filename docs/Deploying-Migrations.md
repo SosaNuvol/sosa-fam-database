@@ -107,8 +107,8 @@ The first Prod deployment is `Deploy_Baseline.ps1 -Environment Prod ...` into an
 
 Never put a password on a command line, in a file in this repository, or in chat.
 
-- **Saved login (recommended):** run `.\Scripts\deploy\Save-DeployCredential.ps1 -Name Prod` once. It's saved to `%APPDATA%\SosaFam\DeployCredentials\Prod.xml`, encrypted with Windows DPAPI so only your Windows account on that PC can read it. Wrappers load it with `-CredentialName Prod`, decrypt it in memory, and pass the connection string to the runner's process only, clearing it when the run ends. Rerun after the password changes.
-- **Prompt:** `-Credential (Get-Credential)` instead of `-CredentialName`.
+- **Saved login (recommended):** run `.\Scripts\deploy\Save-DeployCredential.ps1 -Name Prod` once. It's saved to `%APPDATA%\SosaFam\DeployCredentials\Prod.xml`, encrypted with Windows DPAPI so only your Windows account on that PC can read it. Wrappers load it with `-CredentialName Prod`, decrypt it in memory, build the runner first, and then write the connection string to the runner's standard input (`--connection-stdin`). It never goes on a command line or into an environment variable. Rerun after the password changes. Details, rotation and troubleshooting: [Passwordless production deploys](Passwordless-Prod-Deploys.md).
+- **Prompt:** `-Credential (Get-Credential)` instead of `-CredentialName` (not both: the wrapper refuses).
 - **Windows authentication:** if your Windows account is a `db_owner` of Prod `SOS_FAMILY`, pass `-WindowsAuth` instead of a credential.
 - Don't keep the password in an environment variable: every process you start inherits it.
 

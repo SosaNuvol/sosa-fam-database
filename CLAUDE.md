@@ -19,3 +19,14 @@ dotnet run --project src/SosaFam.Database -- --ensure-database "Server=localhost
 dotnet run --project src/SosaFam.Database -- "<same connection string>"
 sqlcmd -S localhost,1433 -U sa -P '<dev password>' -d Scratch -b -i Scripts/Tests/Policies/security/HouseholdIsolation_Tests.sql
 ```
+
+## Production deploys
+
+Follow [docs/Passwordless-Prod-Deploys.md](docs/Passwordless-Prod-Deploys.md). In short:
+
+- Prod only through a Remote Control session on the person's PC, with their saved `Prod` login (`-CredentialName Prod`).
+- Never read, print, log or copy the password, never open the saved `.xml`, and never ask for the password in chat. If the login is missing or rejected, ask the person to run `.\Scripts\deploy\Save-DeployCredential.ps1 -Name Prod` themselves.
+- No password on a command line or in an environment variable (no `sqlcmd -P`, no `SOSAFAM_DB_CONNECTION` for Prod).
+- Dev first, PR merged, deploy from `main` in sync with `origin/main`, after a backup.
+- Show the exact command and the `-WhatIf` output, then wait for an explicit go. That go allows `-ConfirmTarget`.
+- On failure, stop and report. Don't retry or roll back.
