@@ -57,8 +57,16 @@ function Invoke-SosaFamRunner {
     param([Parameter(Mandatory)][string]$RunnerDll, [Parameter(Mandatory)][string]$ConnectionString, [string[]]$Arguments = @())
     # The connection string goes to the runner's standard input only: never an argument
     # (visible in the process list) and never an environment variable (inherited by children).
-    $ConnectionString | & dotnet $RunnerDll --connection-stdin @Arguments | Out-Host
-    return $LASTEXITCODE
+    # Pipe it as UTF-8 without a byte-order mark. Windows PowerShell 5.1 otherwise uses
+    # $OutputEncoding, which can be ASCII (mangles non-ASCII passwords) or UTF-8 with a BOM.
+    $previousEncoding = $OutputEncoding
+    try {
+        $OutputEncoding = New-Object System.Text.UTF8Encoding $false
+        $ConnectionString | & dotnet $RunnerDll --connection-stdin @Arguments | Out-Host
+        return $LASTEXITCODE
+    } finally {
+        $OutputEncoding = $previousEncoding
+    }
 }
 
 function Invoke-SosaFamScalar {
