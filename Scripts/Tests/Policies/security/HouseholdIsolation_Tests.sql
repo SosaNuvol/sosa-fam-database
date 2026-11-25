@@ -1,7 +1,18 @@
--- Row-level security smoke test. Run against a DEV database only: it creates and
--- then deletes test rows. Fails with an error if any household can see or change
--- another household's rows.
---   sqlcmd -S <server> -d <database> -i tests/rls_isolation_test.sql -b
+/*******************************************************************************
+ * Object Type: Unit Test
+ * Schema: security
+ * Name: HouseholdIsolation_Tests
+ * Description: Row-level security smoke test for security.HouseholdIsolation. Creates two
+ *              test households, checks that neither can see or change the other's rows in
+ *              every protected table, then deletes its test rows. DEV or scratch databases only.
+ *              Fails with an error naming the broken check; prints PASS otherwise.
+ * Dependencies: 00000000_0005_Baseline_FamilyGroceryLists
+ * Author: Claude (for Andres Sosa)
+ * Created: 2026-11-21
+ * Modified: 2026-11-24 - Moved from tests/rls_isolation_test.sql; header added
+ * Usage:
+ *   sqlcmd -S <server> -d <database> -E -b -i Scripts/Tests/Policies/security/HouseholdIsolation_Tests.sql
+ ******************************************************************************/
 SET NOCOUNT ON;
 SET XACT_ABORT OFF;
 SET QUOTED_IDENTIFIER ON;

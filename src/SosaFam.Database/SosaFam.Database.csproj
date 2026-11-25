@@ -8,12 +8,14 @@
     <AssemblyName>SosaFam.Database</AssemblyName>
   </PropertyGroup>
 
+  <!-- Migrations/ at the repository root is embedded, so one build carries every migration.
+       Files that start with an underscore (the template) are not migrations. -->
   <ItemGroup>
-    <EmbeddedResource Include="Scripts\*.sql" />
+    <EmbeddedResource Include="..\..\Migrations\*.sql" Exclude="..\..\Migrations\_*.sql" LogicalName="Migrations/%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="dbup-sqlserver" Version="7.2.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
   </ItemGroup>
 
 </Project>
