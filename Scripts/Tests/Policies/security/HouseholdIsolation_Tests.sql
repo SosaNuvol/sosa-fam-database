@@ -6,10 +6,11 @@
  *              test households, checks that neither can see or change the other's rows in
  *              every protected table, then deletes its test rows. DEV or scratch databases only.
  *              Fails with an error naming the broken check; prints PASS otherwise.
- * Dependencies: 00000000_0005_Baseline_FamilyGroceryLists
+ * Dependencies: 00000000_0005_Baseline_FamilyGroceryLists, 20261125_1907_CreatePAN_StockChanges
  * Author: Claude (for Andres Sosa)
  * Created: 2026-11-21
  * Modified: 2026-11-24 - Moved from tests/rls_isolation_test.sql; header added
+ *           2026-11-25 - PAN.Locations, PAN.Products, PAN.StockLevels, PAN.StockChanges
  * Usage:
  *   sqlcmd -S <server> -d <database> -E -b -i Scripts/Tests/Policies/security/HouseholdIsolation_Tests.sql
  ******************************************************************************/
@@ -34,6 +35,16 @@ DECLARE @sB uniqueidentifier = NEWID(), @lB uniqueidentifier = NEWID(), @lA uniq
 INSERT INTO core.Stores (Id, HouseholdId, Name) VALUES (@sB, @hB, N'WinCo');
 INSERT INTO family.GroceryLists (Id, HouseholdId, Name, CreatedByUserId) VALUES (@lB, @hB, N'Weekly', @u2), (@lA, @hA, N'Weekly', @u1);
 INSERT INTO family.GroceryItems (HouseholdId, ListId, Name, StoreId, AddedByUserId) VALUES (@hB, @lB, N'Milk', @sB, @u2);
+DECLARE @locB int, @locA int, @prodB int, @stockB int;
+INSERT INTO PAN.Locations (HouseholdId, Proxy, PartKey, Name, TrackingMode, CreatedById) VALUES (@hB, CONCAT('PALO:', UTL.fxGetPartKey(), ':', NEWID()), UTL.fxGetPartKey(), N'Pantry', N'Count', @u2);
+SET @locB = SCOPE_IDENTITY();
+INSERT INTO PAN.Locations (HouseholdId, Proxy, PartKey, Name, TrackingMode, CreatedById) VALUES (@hA, CONCAT('PALO:', UTL.fxGetPartKey(), ':', NEWID()), UTL.fxGetPartKey(), N'Pantry', N'Count', @u1);
+SET @locA = SCOPE_IDENTITY();
+INSERT INTO PAN.Products (HouseholdId, StoreId, Proxy, PartKey, Name, MinQuantity, TargetQuantity, CreatedById) VALUES (@hB, @sB, CONCAT('PAPR:', UTL.fxGetPartKey(), ':', NEWID()), UTL.fxGetPartKey(), N'Rice', 10, 25, @u2);
+SET @prodB = SCOPE_IDENTITY();
+INSERT INTO PAN.StockLevels (HouseholdId, ProductId, LocationId, Proxy, PartKey, Quantity, CreatedById) VALUES (@hB, @prodB, @locB, CONCAT('PAST:', UTL.fxGetPartKey(), ':', NEWID()), UTL.fxGetPartKey(), 4, @u2);
+SET @stockB = SCOPE_IDENTITY();
+INSERT INTO PAN.StockChanges (HouseholdId, StockLevelId, ChangeType, QuantityBefore, QuantityAfter, CreatedById) VALUES (@hB, @stockB, N'Set', 0, 4, @u2);
 EXEC sp_set_session_context N'IsSystem', NULL;
 
 BEGIN TRY
@@ -62,6 +73,17 @@ BEGIN TRY
     IF @n <> 0 THROW 50014, 'FAIL: user 1 can see household B grocery items', 1;
     UPDATE family.GroceryItems SET IsChecked = 1 WHERE ListId = @lB;
     IF @@ROWCOUNT <> 0 THROW 50015, 'FAIL: user 1 checked off household B items', 1;
+
+    SELECT @n = COUNT(*) FROM PAN.Locations WHERE HouseholdId = @hB;
+    IF @n <> 0 THROW 50018, 'FAIL: user 1 can see household B locations', 1;
+    SELECT @n = COUNT(*) FROM PAN.Products WHERE HouseholdId = @hB;
+    IF @n <> 0 THROW 50019, 'FAIL: user 1 can see household B products', 1;
+    SELECT @n = COUNT(*) FROM PAN.StockLevels WHERE HouseholdId = @hB;
+    IF @n <> 0 THROW 50020, 'FAIL: user 1 can see household B stock levels', 1;
+    SELECT @n = COUNT(*) FROM PAN.StockChanges WHERE HouseholdId = @hB;
+    IF @n <> 0 THROW 50021, 'FAIL: user 1 can see household B stock changes', 1;
+    UPDATE PAN.StockLevels SET Quantity = 0 WHERE StockLevelID = @stockB;
+    IF @@ROWCOUNT <> 0 THROW 50022, 'FAIL: user 1 changed household B stock', 1;
 
     UPDATE core.Households SET Name = N'hacked' WHERE Id = @hB;
     IF @@ROWCOUNT <> 0 THROW 50006, 'FAIL: user 1 renamed household B', 1;
@@ -96,7 +118,23 @@ BEGIN TRY
     END CATCH;
     IF @blocked = 0 THROW 50016, 'FAIL: user 1 added an item to household B', 1;
 
+    SET @blocked = 0;
+    BEGIN TRY
+        INSERT INTO PAN.Products (HouseholdId, Proxy, PartKey, Name, CreatedById) VALUES (@hB, CONCAT('PAPR:', UTL.fxGetPartKey(), ':', NEWID()), UTL.fxGetPartKey(), N'Intruder product', @u1);
+    END TRY
+    BEGIN CATCH
+        SET @blocked = 1;
+    END CATCH;
+    IF @blocked = 0 THROW 50023, 'FAIL: user 1 added a product to household B', 1;
+
     -- Own household still works.
+    DECLARE @prodA int;
+    INSERT INTO PAN.Products (HouseholdId, Proxy, PartKey, Name, CreatedById) VALUES (@hA, CONCAT('PAPR:', UTL.fxGetPartKey(), ':', NEWID()), UTL.fxGetPartKey(), N'Beans', @u1);
+    SET @prodA = SCOPE_IDENTITY();
+    INSERT INTO PAN.StockLevels (HouseholdId, ProductId, LocationId, Proxy, PartKey, Quantity, CreatedById) VALUES (@hA, @prodA, @locA, CONCAT('PAST:', UTL.fxGetPartKey(), ':', NEWID()), UTL.fxGetPartKey(), 6, @u1);
+    SELECT @n = COUNT(*) FROM PAN.StockLevels WHERE HouseholdId = @hA;
+    IF @n <> 1 THROW 50024, 'FAIL: user 1 cannot see their own stock', 1;
+
     INSERT INTO family.GroceryItems (HouseholdId, ListId, Name, AddedByUserId) VALUES (@hA, @lA, N'Bread', @u1);
     UPDATE family.GroceryItems SET IsChecked = 1 WHERE ListId = @lA;
     IF @@ROWCOUNT <> 1 THROW 50017, 'FAIL: user 1 cannot check off their own item', 1;
@@ -127,4 +165,10 @@ EXEC sp_set_session_context N'HouseholdId', NULL;
 EXEC sp_set_session_context N'IsSystem', 1;
 DELETE FROM core.Households WHERE Id IN (@hA, @hB);
 DELETE FROM auth.AspNetUsers WHERE Id IN (@u1, @u2);
+-- Deleting a household removes its food storage rows too.
+IF EXISTS (SELECT 1 FROM PAN.Locations WHERE HouseholdId IN (@hA, @hB))
+    OR EXISTS (SELECT 1 FROM PAN.Products WHERE HouseholdId IN (@hA, @hB))
+    OR EXISTS (SELECT 1 FROM PAN.StockLevels WHERE HouseholdId IN (@hA, @hB))
+    OR EXISTS (SELECT 1 FROM PAN.StockChanges WHERE HouseholdId IN (@hA, @hB))
+    THROW 50025, 'FAIL: deleting a household left food storage rows behind', 1;
 EXEC sp_set_session_context N'IsSystem', NULL;

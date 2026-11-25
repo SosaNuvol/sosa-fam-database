@@ -13,9 +13,9 @@ New schemas are three upper-case letters and are added here before any migration
 | `core` | Baseline | Tenancy shared by every app | `Households`, `Members`, `Invites`, `Stores` | `00000000_0002_Baseline_CoreHouseholds` |
 | `security` | Baseline | Row-level security | `fn_HouseholdAccess`, `HouseholdIsolation` | `00000000_0003_Baseline_CoreRowLevelSecurity` |
 | `family` | Baseline | Family data-sharing app | `GroceryLists`, `GroceryItems` | `00000000_0005_Baseline_FamilyGroceryLists` |
-| `PAN` | Domain (reserved) | Food storage app (pantry) | | |
-| `MAC` | Infrastructure (reserved) | Proxy-ID catalog | `vwTableTypesAndPrefixes` | |
-| `UTL` | Infrastructure (reserved) | Scalar utilities | `fxGetPartKey` | |
+| `PAN` | Domain | Food storage app (pantry) | `Locations`, `Products`, `StockLevels`, `StockChanges` | `20261125_1902_CreatePAN_Schema` |
+| `MAC` | Infrastructure | Proxy-ID catalog | `vwTableTypesAndPrefixes` | `20261125_1901_CreateMAC_Schema` |
+| `UTL` | Infrastructure | Scalar utilities | `fxGetPartKey` | `20261125_1900_CreateUTL_Schema` |
 
 ## Template
 

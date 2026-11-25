@@ -40,7 +40,8 @@ The standards follow the Solasta database repository, adapted for households. St
 | `core` | Households, members (Owner, Adult, Member, Child), invites, stores |
 | `security` | Row-level security predicates and the `HouseholdIsolation` policy |
 | `family` | Grocery lists and items (family data-sharing app) |
-| `PAN` | Food storage app (reserved) |
+| `PAN` | Food storage app: locations, products, stock levels and their history |
+| `MAC`, `UTL` | Proxy-ID catalog and utilities |
 | `dbo` | `SchemaVersion` |
 
 ## Baseline
